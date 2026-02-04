@@ -1,0 +1,155 @@
+name: Build VoiceClone Studio
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build executable
+        run: pyinstaller voiceclone_windows.spec
+      
+      - name: Zip artifact
+        run: Compress-Archive -Path dist/VoiceClone_Studio -DestinationPath VoiceClone_Studio_Windows.zip
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceClone_Studio_Windows
+          path: VoiceClone_Studio_Windows.zip
+
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build app
+        run: pyinstaller voiceclone_macos.spec
+      
+      - name: Zip artifact
+        run: zip -r VoiceClone_Studio_macOS_Intel.zip "dist/VoiceClone Studio.app"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceClone_Studio_macOS_Intel
+          path: VoiceClone_Studio_macOS_Intel.zip
+
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build app
+        run: pyinstaller voiceclone_macos.spec
+      
+      - name: Zip artifact
+        run: zip -r VoiceClone_Studio_macOS_AppleSilicon.zip "dist/VoiceClone Studio.app"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceClone_Studio_macOS_AppleSilicon
+          path: VoiceClone_Studio_macOS_AppleSilicon.zip
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build executable
+        run: pyinstaller voiceclone_windows.spec
+      
+      - name: Zip artifact
+        run: tar -czvf VoiceClone_Studio_Linux.tar.gz -C dist VoiceClone_Studio
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceClone_Studio_Linux
+          path: VoiceClone_Studio_Linux.tar.gz
+
+  release:
+    needs: [build-windows, build-macos-intel, build-macos-arm, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/VoiceClone_Studio_Windows/VoiceClone_Studio_Windows.zip
+            artifacts/VoiceClone_Studio_macOS_Intel/VoiceClone_Studio_macOS_Intel.zip
+            artifacts/VoiceClone_Studio_macOS_AppleSilicon/VoiceClone_Studio_macOS_AppleSilicon.zip
+            artifacts/VoiceClone_Studio_Linux/VoiceClone_Studio_Linux.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
