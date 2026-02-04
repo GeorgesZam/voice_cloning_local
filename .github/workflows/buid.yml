@@ -25,8 +25,50 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
+      - name: Create launcher
+        shell: python
+        run: |
+          code = '''
+          import sys, os, subprocess, webbrowser, time, socket
+
+          def find_free_port(start=8501):
+              for port in range(start, start + 100):
+                  try:
+                      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                          s.bind(("127.0.0.1", port))
+                          return port
+                  except OSError:
+                      continue
+              return start
+
+          def main():
+              print("VoiceClone Studio")
+              if getattr(sys, "frozen", False):
+                  app_dir = sys._MEIPASS
+              else:
+                  app_dir = os.path.dirname(__file__)
+              app_path = os.path.join(app_dir, "app.py")
+              port = find_free_port()
+              url = f"http://localhost:{port}"
+              print(f"Starting on {url}...")
+              cmd = [sys.executable, "-m", "streamlit", "run", app_path, "--server.port", str(port), "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+              proc = subprocess.Popen(cmd)
+              time.sleep(3)
+              webbrowser.open(url)
+              try:
+                  proc.wait()
+              except KeyboardInterrupt:
+                  proc.terminate()
+
+          if __name__ == "__main__":
+              main()
+          '''
+          with open("launcher.py", "w") as f:
+              f.write(code)
+      
       - name: Build executable
-        run: pyinstaller voiceclone_windows.spec
+        run: |
+          pyinstaller --name "VoiceClone_Studio" --add-data "app.py;." --collect-all streamlit --collect-all torch --collect-all torchaudio --collect-all chatterbox --hidden-import streamlit --hidden-import torch --hidden-import torchaudio --hidden-import soundfile --hidden-import scipy.signal --console --noconfirm launcher.py
       
       - name: Zip artifact
         run: Compress-Archive -Path dist/VoiceClone_Studio -DestinationPath VoiceClone_Studio_Windows.zip
@@ -36,36 +78,6 @@ jobs:
         with:
           name: VoiceClone_Studio_Windows
           path: VoiceClone_Studio_Windows.zip
-
-  build-macos-intel:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install torch torchaudio
-          pip install -r requirements.txt
-          pip install pyinstaller
-      
-      - name: Build app
-        run: pyinstaller voiceclone_macos.spec
-      
-      - name: Zip artifact
-        run: zip -r VoiceClone_Studio_macOS_Intel.zip "dist/VoiceClone Studio.app"
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: VoiceClone_Studio_macOS_Intel
-          path: VoiceClone_Studio_macOS_Intel.zip
 
   build-macos-arm:
     runs-on: macos-14
@@ -85,17 +97,156 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
+      - name: Create launcher
+        run: |
+          cat > launcher.py << 'LAUNCHER_EOF'
+          import sys, os, subprocess, webbrowser, time, socket
+
+          def find_free_port(start=8501):
+              for port in range(start, start + 100):
+                  try:
+                      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                          s.bind(("127.0.0.1", port))
+                          return port
+                  except OSError:
+                      continue
+              return start
+
+          def main():
+              print("VoiceClone Studio")
+              if getattr(sys, "frozen", False):
+                  app_dir = sys._MEIPASS
+              else:
+                  app_dir = os.path.dirname(__file__)
+              app_path = os.path.join(app_dir, "app.py")
+              port = find_free_port()
+              url = f"http://localhost:{port}"
+              print(f"Starting on {url}...")
+              cmd = [sys.executable, "-m", "streamlit", "run", app_path, "--server.port", str(port), "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+              proc = subprocess.Popen(cmd)
+              time.sleep(3)
+              webbrowser.open(url)
+              try:
+                  proc.wait()
+              except KeyboardInterrupt:
+                  proc.terminate()
+
+          if __name__ == "__main__":
+              main()
+          LAUNCHER_EOF
+      
       - name: Build app
-        run: pyinstaller voiceclone_macos.spec
+        run: |
+          pyinstaller --name "VoiceClone Studio" \
+            --add-data "app.py:." \
+            --collect-all streamlit \
+            --collect-all torch \
+            --collect-all torchaudio \
+            --collect-all chatterbox \
+            --hidden-import streamlit \
+            --hidden-import torch \
+            --hidden-import torch.backends.mps \
+            --hidden-import torchaudio \
+            --hidden-import soundfile \
+            --hidden-import scipy.signal \
+            --windowed \
+            --noconfirm \
+            launcher.py
       
       - name: Zip artifact
-        run: zip -r VoiceClone_Studio_macOS_AppleSilicon.zip "dist/VoiceClone Studio.app"
+        run: |
+          cd dist
+          zip -r ../VoiceClone_Studio_macOS_AppleSilicon.zip "VoiceClone Studio.app"
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: VoiceClone_Studio_macOS_AppleSilicon
           path: VoiceClone_Studio_macOS_AppleSilicon.zip
+
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Create launcher
+        run: |
+          cat > launcher.py << 'LAUNCHER_EOF'
+          import sys, os, subprocess, webbrowser, time, socket
+
+          def find_free_port(start=8501):
+              for port in range(start, start + 100):
+                  try:
+                      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                          s.bind(("127.0.0.1", port))
+                          return port
+                  except OSError:
+                      continue
+              return start
+
+          def main():
+              print("VoiceClone Studio")
+              if getattr(sys, "frozen", False):
+                  app_dir = sys._MEIPASS
+              else:
+                  app_dir = os.path.dirname(__file__)
+              app_path = os.path.join(app_dir, "app.py")
+              port = find_free_port()
+              url = f"http://localhost:{port}"
+              print(f"Starting on {url}...")
+              cmd = [sys.executable, "-m", "streamlit", "run", app_path, "--server.port", str(port), "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+              proc = subprocess.Popen(cmd)
+              time.sleep(3)
+              webbrowser.open(url)
+              try:
+                  proc.wait()
+              except KeyboardInterrupt:
+                  proc.terminate()
+
+          if __name__ == "__main__":
+              main()
+          LAUNCHER_EOF
+      
+      - name: Build app
+        run: |
+          pyinstaller --name "VoiceClone Studio" \
+            --add-data "app.py:." \
+            --collect-all streamlit \
+            --collect-all torch \
+            --collect-all torchaudio \
+            --collect-all chatterbox \
+            --hidden-import streamlit \
+            --hidden-import torch \
+            --hidden-import torchaudio \
+            --hidden-import soundfile \
+            --hidden-import scipy.signal \
+            --windowed \
+            --noconfirm \
+            launcher.py
+      
+      - name: Zip artifact
+        run: |
+          cd dist
+          zip -r ../VoiceClone_Studio_macOS_Intel.zip "VoiceClone Studio.app"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceClone_Studio_macOS_Intel
+          path: VoiceClone_Studio_macOS_Intel.zip
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -118,8 +269,60 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
+      - name: Create launcher
+        run: |
+          cat > launcher.py << 'LAUNCHER_EOF'
+          import sys, os, subprocess, webbrowser, time, socket
+
+          def find_free_port(start=8501):
+              for port in range(start, start + 100):
+                  try:
+                      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                          s.bind(("127.0.0.1", port))
+                          return port
+                  except OSError:
+                      continue
+              return start
+
+          def main():
+              print("VoiceClone Studio")
+              if getattr(sys, "frozen", False):
+                  app_dir = sys._MEIPASS
+              else:
+                  app_dir = os.path.dirname(__file__)
+              app_path = os.path.join(app_dir, "app.py")
+              port = find_free_port()
+              url = f"http://localhost:{port}"
+              print(f"Starting on {url}...")
+              cmd = [sys.executable, "-m", "streamlit", "run", app_path, "--server.port", str(port), "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+              proc = subprocess.Popen(cmd)
+              time.sleep(3)
+              webbrowser.open(url)
+              try:
+                  proc.wait()
+              except KeyboardInterrupt:
+                  proc.terminate()
+
+          if __name__ == "__main__":
+              main()
+          LAUNCHER_EOF
+      
       - name: Build executable
-        run: pyinstaller voiceclone_windows.spec
+        run: |
+          pyinstaller --name "VoiceClone_Studio" \
+            --add-data "app.py:." \
+            --collect-all streamlit \
+            --collect-all torch \
+            --collect-all torchaudio \
+            --collect-all chatterbox \
+            --hidden-import streamlit \
+            --hidden-import torch \
+            --hidden-import torchaudio \
+            --hidden-import soundfile \
+            --hidden-import scipy.signal \
+            --console \
+            --noconfirm \
+            launcher.py
       
       - name: Zip artifact
         run: tar -czvf VoiceClone_Studio_Linux.tar.gz -C dist VoiceClone_Studio
